@@ -1,0 +1,2281 @@
+/* ─── Tokens ─── */
+
+:root {
+  --bg: #121212;
+  --bg-elevated: #1e1e1e;
+  --bg-surface: #2a2a2a;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --surface-elevated: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #e8e8e8;
+  --text-2: rgba(255, 255, 255, 0.7);
+  /* 0.5 is the floor that clears 4.5:1 on --bg-surface; see check-contrast.mjs */
+  --text-3: rgba(255, 255, 255, 0.5);
+  --hot: #ff6b45;
+  --ember: #ffb366;
+  --cool: #64d2ff;
+  --forged: #4ade80;
+  --ring-track: rgba(255, 255, 255, 0.08);
+  --radius: 16px;
+  --radius-sm: 10px;
+  /* Banked coals at rest, open flame while working */
+  --forge-light: rgba(255, 107, 69, 0.07);
+  --forge-light-active: rgba(255, 122, 60, 0.20);
+}
+
+[data-theme="daybreak"] {
+  /* Modern light — cool gray undertone, clean and airy */
+  --bg: #f8f9fb;
+  --bg-elevated: #ffffff;
+  --bg-surface: #f0f1f4;
+  --surface: rgba(30, 40, 60, 0.04);
+  --surface-hover: rgba(30, 40, 60, 0.08);
+  --surface-elevated: rgba(30, 40, 60, 0.05);
+  --border: rgba(30, 40, 60, 0.12);
+  --text: #1e2028;
+  --text-2: rgba(30, 32, 40, 0.72);
+  --text-3: rgba(30, 32, 40, 0.64);
+  /* Vivid but not harsh accents */
+  --hot: #d4450c;
+  --ember: #b45309;
+  --cool: #0e7490;
+  --forged: #15803d;
+  --ring-track: rgba(0, 0, 0, 0.06);
+  --forge-light: rgba(100, 120, 140, 0.04);
+  --forge-light-active: rgba(255, 120, 50, 0.12);
+}
+
+/* ─── Reset ─── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  /*
+   * Bumped from browser default 16px to 18px. The previous layout felt small at
+   * 100% zoom and comfortable at 150%, meaning 16×1.5 = 24px was the working
+   * baseline. 18px gets us closer without requiring zoom while still respecting
+   * user preferences (this is a relative unit, so `font-size: larger` in
+   * browser settings still works).
+   */
+  font-size: 125%; /* 20px on a 16px default */
+}
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+body {
+  font-family: "Inter", -apple-system, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.4s ease, color 0.3s ease;
+}
+
+/* ─── Animated Background Orbs ─── */
+
+/* ─── Forge light ───
+   Light is anchored to the forge rather than drifting independently, so it
+   reads as illumination coming off the work instead of decorative blobs. */
+
+.center-col {
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 50% 62%,
+      var(--forge-light) 0%,
+      transparent 70%
+    );
+  transition: background 1.2s ease;
+}
+
+.center-col[data-forging="true"] {
+  background:
+    radial-gradient(
+      ellipse 80% 65% at 50% 62%,
+      var(--forge-light-active) 0%,
+      transparent 72%
+    );
+}
+
+/* ─── App Shell ─── */
+
+/*
+ * Never clip. An earlier version used `height: 100vh; overflow: hidden`, which
+ * breaks under browser zoom: zooming shrinks how much rem-sized content fits in
+ * 100vh, so content outgrew a container forbidden from scrolling and was cut
+ * off. `min-height` + scrollable regions degrade gracefully instead.
+ */
+.app {
+  position: relative;
+  min-height: 100dvh;
+}
+
+/*
+ * Definite height, with scrolling delegated to the two columns. This is safe
+ * because both columns are `overflow-y: auto` — the earlier clipping happened
+ * when the shell was constrained *and* the columns were `overflow: hidden`.
+ *
+ * Without a definite height here the grid row sizes to the tallest column (the
+ * sidebar, ~1200px), which stretched the centre column and pushed the anvil
+ * far below the fold.
+ */
+.app-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+/* ─── Header ─── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.brand {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-ai {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, rgba(255, 163, 72, 0.15), rgba(255, 87, 51, 0.15));
+  border: 1px solid rgba(255, 163, 72, 0.25);
+  border-radius: 20px;
+  color: var(--ember);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ai:hover {
+  background: linear-gradient(135deg, rgba(255, 163, 72, 0.25), rgba(255, 87, 51, 0.25));
+  transform: translateY(-1px);
+}
+
+.badge {
+  font-size: 0.75rem;
+  color: var(--forged);
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 20px;
+  background: rgba(74, 222, 128, 0.05);
+}
+
+/* ─── Main Layout ─── */
+
+.main {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  flex: 1;
+  min-height: 0; /* lets children shrink instead of overflowing */
+}
+
+.center-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  gap: 1rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.side-col {
+  border-left: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: var(--bg-elevated);
+}
+
+/* ─── Forge Visual ─── */
+
+.forge-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  position: relative;
+}
+
+.forge-visual {
+  position: relative;
+  /* Fill the column's spare height, with sane floor/ceiling */
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 520px;
+  min-height: 220px;
+  max-height: 460px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.forge-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: visible;
+}
+
+/* Ember particles */
+.embers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ember {
+  position: absolute;
+  bottom: 30%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ember);
+  opacity: 0;
+  animation: rise linear infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise {
+    0% {
+      opacity: 0.9;
+      transform: translateY(0) scale(1);
+    }
+    50% {
+      opacity: 0.6;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-180px) translateX(var(--drift, 10px)) scale(0.3);
+    }
+  }
+}
+
+.ember:nth-child(odd) { --drift: -12px; background: var(--hot); width: 3px; height: 3px; }
+.ember:nth-child(3n) { --drift: 18px; width: 2px; height: 2px; }
+.ember:nth-child(5n) { --drift: -25px; background: #ffba08; }
+
+/* Daylight washes out airborne embers — fewer, fainter */
+[data-theme="daybreak"] .ember { opacity: 0; animation-name: rise-faint; }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise-faint {
+    0%   { opacity: 0.45; transform: translateY(0) scale(0.8); }
+    100% { opacity: 0; transform: translateY(-140px) translateX(var(--drift, 10px)) scale(0.2); }
+  }
+}
+
+/* Timer overlay on forge */
+.timer-overlay {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.timer-display {
+  font-size: clamp(2.5rem, 7vh, 3.75rem);
+  font-weight: 200;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.timer-label {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+}
+
+.active-task-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-2);
+  text-align: center;
+  max-width: 280px;
+}
+
+.no-task {
+  font-size: 0.85rem;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.timer-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-primary {
+  padding: 0.9rem 2.5rem;
+  background: var(--hot);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 4px 24px rgba(255, 87, 51, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 32px rgba(255, 87, 51, 0.4);
+}
+
+.btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+/* Disabled goes neutral rather than a faded orange (which reads as salmon) */
+.btn-primary:disabled {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  padding: 0.9rem 2.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-secondary:hover { background: var(--surface-hover); }
+
+/* ─── Task List ─── */
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.task-list-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-3);
+  font-weight: 700;
+}
+
+.task-input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.task-input-row input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.task-input-row input::placeholder { color: var(--text-3); }
+.task-input-row input:focus { border-color: var(--ember); }
+
+.btn-add {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hot);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.btn-add:hover { transform: scale(1.05); }
+
+.task-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.empty-state {
+  color: var(--text-3);
+  font-size: 0.8rem;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.task-item:hover { background: var(--surface-hover); }
+.task-item.active {
+  background: var(--surface-elevated);
+  border-color: var(--ember);
+  box-shadow: 0 0 0 1px rgba(255, 163, 72, 0.1);
+}
+
+.task-item.forged {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.task-item.forged .task-item-title { text-decoration: line-through; }
+
+.task-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.task-item.active .task-dot {
+  background: var(--hot);
+  box-shadow: 0 0 10px var(--hot);
+}
+
+.task-item.forged .task-dot { background: var(--forged); }
+
+.task-item-title {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 450;
+}
+
+.btn-delete-small {
+  opacity: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.12s;
+}
+
+.task-item:hover .btn-delete-small { opacity: 1; }
+.btn-delete-small:hover {
+  background: #ef4444;
+  color: #fff;
+  border-color: transparent;
+}
+
+.forged-section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.forged-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--forged);
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+/* ─── Forge Master AI Panel ─── */
+
+.forge-master-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fm-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fm-icon { font-size: 1.1rem; }
+
+.fm-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.fm-badge {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: linear-gradient(135deg, rgba(255, 163, 72, 0.2), rgba(255, 87, 51, 0.2));
+  color: var(--ember);
+  font-weight: 700;
+}
+
+.fm-desc {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.btn-forge-master {
+  width: 100%;
+  padding: 0.7rem;
+  background: linear-gradient(135deg, var(--hot), var(--ember));
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-forge-master:hover:not(:disabled) { transform: translateY(-1px); }
+.btn-forge-master:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.fm-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.fm-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--ember);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.fm-response {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fm-batch {
+  padding: 0.75rem;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.fm-batch-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: var(--ember);
+}
+
+.fm-batch-tasks {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.4rem;
+}
+
+.fm-batch-tasks li {
+  font-size: 0.78rem;
+  color: var(--text);
+  padding-left: 0.75rem;
+  position: relative;
+}
+
+.fm-batch-tasks li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--text-3);
+  font-size: 0.7rem;
+}
+
+.fm-batch-reason {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.fm-tip {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  border-left: 2px solid var(--ember);
+  padding-left: 0.75rem;
+  font-style: italic;
+}
+
+.btn-secondary-sm {
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-secondary-sm:hover { background: var(--surface-hover); }
+
+/* ─── Focus ─── */
+:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+
+/* ─── Reduced Motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .orb { animation: none !important; }
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 800px) {
+  .main { grid-template-columns: 1fr; }
+  .center-col { padding: 2rem 1rem; }
+  .timer-ring-container { width: 280px; height: 280px; }
+  .timer-display { font-size: 3rem; }
+  .side-col { border-left: none; border-top: 1px solid var(--border); }
+  .header { padding: 0.75rem 1rem; }
+}
+
+/* ─── Timer Controls Block ─── */
+
+.timer-controls-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.timer-time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.timer-task-name {
+  font-size: 0.9rem;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.timer-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.timer-warning {
+  font-size: 0.7rem;
+  color: var(--hot);
+  opacity: 0.8;
+  text-align: center;
+}
+
+.btn-danger {
+  padding: 0.9rem 2rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* ─── Streak ─── */
+
+.streak {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--hot);
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgba(255, 87, 51, 0.2);
+  border-radius: 20px;
+  background: rgba(255, 87, 51, 0.05);
+}
+
+/* ─── Task locked state ─── */
+
+.task-item.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Smithy (Forged Items Collection) ─── */
+
+.smithy {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.smithy-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--forged);
+  font-weight: 700;
+}
+
+.smithy-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  margin-bottom: 0.75rem;
+}
+
+.smithy-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.smithy-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.smithy-item:hover {
+  background: var(--surface-hover);
+}
+
+.smithy-item.failed {
+  opacity: 0.45;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.smithy-item-icon {
+  font-size: 1.1rem;
+}
+
+.smithy-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.smithy-item-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.smithy-item-task {
+  font-size: 0.68rem;
+  color: var(--text-3);
+}
+
+.smithy-item.failed .smithy-item-name {
+  text-decoration: line-through;
+  color: #ef4444;
+}
+
+/* ─── Forge Master Suggestions ─── */
+
+.fm-section {
+  margin-bottom: 0.75rem;
+}
+
+.fm-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.fm-suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: var(--surface);
+  margin-bottom: 0.35rem;
+}
+
+.fm-est {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ember);
+  background: rgba(255, 163, 72, 0.1);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.fm-task-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: block;
+}
+
+.fm-reason {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  display: block;
+}
+
+.fm-pattern {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  padding: 0.5rem;
+  background: var(--surface);
+  border-radius: 8px;
+  border-left: 2px solid var(--cool);
+}
+
+.fm-summary {
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+/* ─── Theme Toggle Button ─── */
+
+.btn-theme {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.btn-theme:hover {
+  background: var(--surface-hover);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Layout density — the previous build left a large empty gap
+   between the anvil and the timer. Cap the art and tighten gaps.
+   ══════════════════════════════════════════════════════════════ */
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  min-width: 0;
+}
+
+.center-col {
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 1.75rem;
+}
+
+.forge-visual {
+  max-height: 340px;
+  min-height: 180px;
+}
+
+/* ─── Stats strip (always visible, including at zero) ─── */
+
+.stats-strip {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0;
+}
+
+.stats-strip .stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.stats-strip dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.stats-strip dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-strip .stat-bad dd { color: var(--hot); }
+
+/* ─── Timer block ─── */
+
+.timer-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.timer-guidance {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  min-height: 1.2em;
+  text-align: center;
+}
+
+.guidance-active {
+  color: var(--ember);
+  font-weight: 600;
+}
+
+.timer-warning {
+  font-size: 0.72rem;
+  color: var(--hot);
+  text-align: center;
+}
+
+/* ─── Shared panel bits ─── */
+
+.panel-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text-3);
+  font-weight: 700;
+}
+
+.panel-note {
+  font-size: 0.7rem;
+  color: var(--text-3);
+}
+
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.btn-icon:hover { background: var(--surface-hover); }
+
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 1.1rem;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-ghost:hover { background: var(--surface-hover); }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Smithy ─── */
+
+.smithy-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.smithy-hint {
+  font-size: 0.76rem;
+  color: var(--text-3);
+  line-height: 1.5;
+  margin-bottom: 0.7rem;
+}
+
+.smithy-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.smithy-slot {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-align: center;
+  padding: 0.3rem;
+}
+
+.smithy-slot.empty {
+  border-style: dashed;
+  background: none;
+  color: var(--text-3);
+  opacity: 0.5;
+}
+
+.smithy-slot .slot-icon { font-size: 1.35rem; line-height: 1; }
+
+.smithy-slot .slot-label {
+  font-size: 0.6rem;
+  color: var(--text-2);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.smithy-slot.failed { opacity: 0.4; border-color: rgba(239, 68, 68, 0.3); }
+.smithy-slot.failed .slot-label { text-decoration: line-through; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .smithy-slot.just-forged { animation: slot-land 0.6s ease-out; }
+  @keyframes slot-land {
+    0%   { transform: scale(0.7); box-shadow: 0 0 0 0 var(--ember); }
+    60%  { transform: scale(1.06); box-shadow: 0 0 0 6px transparent; }
+    100% { transform: scale(1); }
+  }
+}
+
+/* ─── Completion reveal ─── */
+
+.reveal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.reveal {
+  position: relative;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2.25rem 2.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 340px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+}
+
+.reveal-icon { font-size: 3.5rem; line-height: 1; }
+
+.reveal-kicker {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: var(--ember);
+}
+
+.reveal.ruined .reveal-kicker { color: #ef4444; }
+
+.reveal-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.reveal-task { font-size: 0.82rem; color: var(--text-3); }
+
+.reveal-note {
+  font-size: 0.76rem;
+  color: #ef4444;
+  margin-top: 0.2rem;
+}
+
+.reveal .btn-ghost { margin-top: 1rem; }
+
+/* Radial spark burst */
+.reveal-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.reveal-spark {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--ember);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal-spark {
+    animation: spark-out 0.85s ease-out forwards;
+    animation-delay: var(--delay);
+  }
+  @keyframes spark-out {
+    0%   { opacity: 1; transform: rotate(var(--angle)) translateY(0) scale(1); }
+    100% { opacity: 0; transform: rotate(var(--angle)) translateY(-120px) scale(0.2); }
+  }
+  .reveal { animation: reveal-in 0.34s cubic-bezier(0.2, 0.9, 0.25, 1); }
+  @keyframes reveal-in {
+    from { opacity: 0; transform: scale(0.9) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+}
+
+/* ─── Onboarding ─── */
+
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  padding: 1.5rem;
+}
+
+.onboarding {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2.25rem;
+  max-width: 400px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+}
+
+.ob-icon { font-size: 2.6rem; line-height: 1; margin-bottom: 0.2rem; }
+
+.ob-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.ob-body {
+  font-size: 0.87rem;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.ob-dots {
+  list-style: none;
+  display: flex;
+  gap: 0.4rem;
+  margin: 1rem 0 0.25rem;
+}
+
+.ob-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, width 0.2s;
+}
+
+.ob-dot.done { background: var(--text-3); }
+.ob-dot.current { background: var(--ember); width: 20px; border-radius: 4px; }
+
+.ob-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+/* ─── Forge Master ─── */
+
+.fm-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.fm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fm-badge {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  padding: 0.18rem 0.42rem;
+  border-radius: 4px;
+  color: var(--ember);
+  border: 1px solid var(--border);
+}
+
+.fm-desc { font-size: 0.78rem; color: var(--text-2); line-height: 1.55; }
+
+.btn-forge-master {
+  width: 100%;
+  padding: 0.65rem;
+  background: var(--hot);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.btn-forge-master:hover { filter: brightness(1.08); }
+
+.fm-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+.fm-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--ember);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fm-spinner { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+}
+
+.fm-body { display: flex; flex-direction: column; gap: 0.85rem; }
+.fm-section { display: flex; flex-direction: column; gap: 0.35rem; }
+
+.fm-sub {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--text-3);
+  font-weight: 700;
+}
+
+.fm-est-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.fm-est {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ember);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.15rem 0.38rem;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fm-est-task {
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.fm-est-task em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--text-3);
+}
+
+.fm-pattern {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+/* ─── Responsive ─── */
+
+@media (max-width: 900px) {
+  .stats-strip { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Rarity — one accent scale reused by picker, smithy, reveal
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  --r-common: #9ca3af;
+  --r-uncommon: #4ade80;
+  --r-rare: #60a5fa;
+  --r-masterwork: #fbbf24;
+}
+
+[data-theme="daybreak"] {
+  --r-common: #6b7280;
+  --r-uncommon: #15803d;
+  --r-rare: #1d4ed8;
+  --r-masterwork: #a16207;
+}
+
+.rarity-common   { --r: var(--r-common); }
+.rarity-uncommon { --r: var(--r-uncommon); }
+.rarity-rare     { --r: var(--r-rare); }
+.rarity-masterwork { --r: var(--r-masterwork); }
+
+/* ─── Duration picker ─── */
+
+.duration-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.duration-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.duration-chip {
+  padding: 0.4rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.duration-chip:hover:not(:disabled) { background: var(--surface-hover); }
+
+.duration-chip.active {
+  background: var(--ember);
+  border-color: var(--ember);
+  color: #1a1410;
+}
+
+.duration-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.duration-custom input {
+  width: 62px;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+
+.duration-custom input:focus { border-color: var(--ember); }
+.duration-custom input:disabled { opacity: 0.4; }
+
+.duration-reward {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.duration-reward strong { color: var(--r); font-weight: 700; }
+
+/* ─── Rank panel ─── */
+
+.rank-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rank-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.rank-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ember);
+}
+
+.rank-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ring-track);
+  overflow: hidden;
+  margin-top: 0.15rem;
+}
+
+.rank-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--hot), var(--ember));
+  transition: width 0.6s ease;
+}
+
+.rank-next { font-size: 0.72rem; color: var(--text-3); }
+
+.badge-head { margin-top: 0.6rem; }
+
+.badge-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+}
+
+.badge {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 1.05rem;
+}
+
+.badge.locked { opacity: 0.35; filter: grayscale(1); }
+
+.badge.unlocked {
+  border-color: color-mix(in srgb, var(--ember) 45%, transparent);
+  background: color-mix(in srgb, var(--ember) 10%, transparent);
+}
+
+/* ─── Smithy rarity treatment ─── */
+
+.smithy-slot.filled {
+  border-color: color-mix(in srgb, var(--r) 40%, transparent);
+  background: color-mix(in srgb, var(--r) 9%, transparent);
+}
+
+.smithy-slot.filled .slot-label { color: var(--r); }
+
+.rarity-tally {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.tally {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--r) 40%, transparent);
+  background: color-mix(in srgb, var(--r) 10%, transparent);
+}
+
+.tally-count { font-size: 0.72rem; font-weight: 700; color: var(--r); }
+.tally-label { font-size: 0.64rem; color: var(--text-3); }
+
+.btn-block { width: 100%; margin-top: 0.5rem; }
+
+/* ─── Reveal rarity accent ─── */
+
+.reveal.rarity-masterwork,
+.reveal.rarity-rare,
+.reveal.rarity-uncommon,
+.reveal.rarity-common {
+  border-color: color-mix(in srgb, var(--r) 45%, transparent);
+}
+
+.reveal .reveal-kicker { color: var(--r); }
+.reveal-spark { background: var(--r, var(--ember)); }
+.reveal-meta { font-size: 0.74rem; color: var(--text-3); }
+
+/* ─── Task estimate chip ─── */
+
+.task-est {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--ember);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1rem 0.32rem;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ─── AI tag on the Forge Master button ─── */
+
+.ai-tag {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  padding: 0.1rem 0.28rem;
+  margin-left: 0.4rem;
+  border-radius: 3px;
+  background: var(--ember);
+  color: #1a1410;
+  vertical-align: middle;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Heat gauge — replaces the plain countdown text
+   ══════════════════════════════════════════════════════════════ */
+
+.gauge {
+  width: min(320px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gauge-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+}
+
+.gauge-seg {
+  flex: 1;
+  border-radius: 1px;
+  background: var(--ring-track);
+  /* Taller toward the hot end, like a real pyrometer scale */
+  height: calc(45% + (var(--seg-pos) * 55%));
+  transition: background-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* Colour ramp across the scale position, applied only once lit */
+.gauge-seg.lit {
+  background: color-mix(
+    in oklab,
+    #b3401a calc((1 - var(--seg-pos)) * 100%),
+    #fff3b0 calc(var(--seg-pos) * 100%)
+  );
+  box-shadow: 0 0 6px color-mix(in oklab, #ff6b2c 60%, transparent);
+}
+
+.gauge.cooling .gauge-seg.lit {
+  background: var(--cool);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--cool) 50%, transparent);
+}
+
+.gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.gauge-scale-mid { color: var(--text-2); }
+
+/* Timer numerals — tabular so they don't jitter, tighter tracking */
+.timer-display {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.045em;
+  font-weight: 250;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Challenges / sets / bests
+   ══════════════════════════════════════════════════════════════ */
+
+.challenge-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.challenge-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.challenge {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.ch-icon { font-size: 0.95rem; flex-shrink: 0; }
+
+.ch-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.ch-title {
+  font-size: 0.74rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ring-track);
+  overflow: hidden;
+}
+
+.ch-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--hot), var(--ember));
+  transition: width 0.5s ease;
+}
+
+.challenge.done .ch-fill { background: var(--forged); }
+.challenge.done .ch-title { color: var(--forged); }
+
+.ch-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.set-heading { margin-top: 0.7rem; }
+
+.set-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.set-label {
+  font-size: 0.7rem;
+  color: var(--r);
+  font-weight: 600;
+  width: 74px;
+  flex-shrink: 0;
+}
+
+.set-pips { display: flex; gap: 3px; flex: 1; }
+
+.pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--r) 45%, transparent);
+  background: transparent;
+}
+
+.pip.on { background: var(--r); }
+
+.set-count {
+  font-size: 0.66rem;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.bests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.best-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.best-row dt { font-size: 0.72rem; color: var(--text-3); }
+
+.best-row dd {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Smithy visibility — empty slots were near-invisible at 0.5 opacity
+   over a low-contrast dashed border
+   ══════════════════════════════════════════════════════════════ */
+
+.smithy-slot.empty {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--text-3) 45%, transparent);
+  background: var(--surface);
+  color: var(--text-3);
+  opacity: 1; /* was 0.5 — compounded with low-contrast border */
+}
+
+.smithy-slot.empty .slot-icon {
+  opacity: 0.75;
+  font-size: 1.15rem;
+}
+
+.smithy-hint {
+  color: var(--text-2); /* was --text-3, too faint for body copy */
+}
+
+/* Locked badges were greyscale at 0.35 — legible now while still reading
+   as unearned. */
+.badge.locked {
+  opacity: 1;
+  filter: none;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--text-3) 40%, transparent);
+  color: var(--text-3);
+}
+
+.badge.locked .badge-icon { opacity: 0.6; }
+
+/* ══════════════════════════════════════════════════════════════
+   Duration stepper — replaces <input type="number">, whose native
+   spinner arrows cannot be styled consistently across browsers.
+   ══════════════════════════════════════════════════════════════ */
+
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.stepper-btn {
+  width: 34px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  /* 24px minimum target per WCAG 2.5.8 */
+  min-height: 32px;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.stepper-value {
+  min-width: 62px;
+  display: grid;
+  place-items: center;
+  padding: 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+/* Defensive: if any number input is reintroduced, keep spinners hidden. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Retire the old custom-minutes field styling */
+.duration-custom { display: none; }
+
+/* ══════════════════════════════════════════════════════════════
+   Density pass
+   At 100% zoom the composition read as too sparse — the anvil was
+   capped small while the column kept generous padding, leaving a
+   wide empty band. Scale the artwork up and tighten the gaps.
+   ══════════════════════════════════════════════════════════════ */
+
+.center-col {
+  padding: 0.75rem 1.25rem 1.25rem;
+  gap: 0.35rem;
+}
+
+.forge-visual {
+  max-width: 560px;
+  min-height: 240px;
+  max-height: 420px;
+}
+
+.timer-block { gap: 0.45rem; }
+
+.timer-display { font-size: clamp(2.75rem, 8vh, 4.25rem); }
+
+.duration-picker { gap: 0.4rem; }
+
+/* Sidebar: reduce scrolling by tightening internal rhythm */
+.side-col {
+  padding: 1.25rem 1.15rem;
+  gap: 1rem;
+}
+
+.rank-panel,
+.challenge-panel,
+.fm-panel {
+  padding: 0.85rem 0.95rem;
+  gap: 0.35rem;
+}
+
+.badge-grid { gap: 0.3rem; }
+.badge { border-radius: 8px; font-size: 0.95rem; }
+
+.smithy-grid { gap: 0.4rem; }
+
+/* Wider viewports can afford a roomier sidebar */
+@media (min-width: 1280px) {
+  .main { grid-template-columns: 1fr 400px; }
+}
+
+@media (min-width: 1600px) {
+  .main { grid-template-columns: 1fr 440px; }
+  .forge-visual { max-height: 480px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Zoom-resilient sizing
+   Replaces viewport-relative sizing with rem-based caps. Under zoom,
+   `vh` tracks a shrinking viewport while rem-sized content grows, so
+   the two fight each other. Everything below scales with the user's
+   font size instead, and any region that can overflow may scroll.
+   ══════════════════════════════════════════════════════════════ */
+
+.main {
+  align-items: stretch;
+  /* Constrains the grid row to the shell so columns scroll internally instead
+     of the tallest column dictating the row height. */
+  min-height: 0;
+  overflow: hidden;
+}
+
+.center-col {
+  overflow-y: auto;
+  padding: 1rem 1.25rem 1.5rem;
+  gap: 0.5rem;
+  /*
+   * `safe center` centres when there is room but falls back to start-alignment
+   * when content overflows — plain `center` leaves the overflowing top edge
+   * unreachable in a scroll container. First declaration is the fallback for
+   * engines that don't parse the `safe` keyword.
+   */
+  justify-content: center;
+  justify-content: safe center;
+}
+
+/* Belt-and-braces centring that works even without `safe` support: auto
+   margins collapse to zero once content fills the container. */
+.center-col > :first-child { margin-top: auto; }
+.center-col > :last-child { margin-bottom: auto; }
+
+/*
+ * The artwork is decorative, so it scales with viewport height — a short window
+ * gets a smaller anvil rather than an overflowing column. This is safe now only
+ * because nothing clips: the earlier breakage came from viewport units *plus*
+ * `overflow: hidden`, not from viewport units alone.
+ *
+ * Height drives the box and `aspect-ratio` derives the width, matching the SVG
+ * viewBox (222 × 212) so the art is never anchored oddly.
+ */
+.forge-visual {
+  aspect-ratio: 222 / 212;
+  height: clamp(8rem, 34dvh, 20rem);
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  max-height: none;
+  flex: 0 0 auto;
+}
+
+.forge-svg { overflow: visible; }
+
+/*
+ * Pure rem — no vh/vw. Viewport units shrink under zoom while rem grows, so
+ * mixing them makes zoom behaviour unpredictable. Narrow screens are handled
+ * by an explicit media query below instead.
+ */
+.timer-display {
+  font-size: 3rem;
+  line-height: 1.05;
+}
+
+@media (max-width: 520px) {
+  .timer-display { font-size: 2.25rem; }
+}
+
+.gauge { width: min(21rem, 100%); }
+
+/* Duration controls wrap instead of overflowing when space is tight */
+.duration-presets {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.duration-picker { width: 100%; max-width: 21rem; }
+
+/* Sidebar scrolls independently of the page */
+.side-col {
+  overflow-y: auto;
+  max-height: none;
+}
+
+@media (min-width: 1600px) {
+  .forge-visual { width: min(100%, 24rem); max-width: 24rem; }
+  .gauge { width: min(24rem, 100%); }
+  .duration-picker { max-width: 24rem; }
+}
+
+/* Below the two-column breakpoint, stack and let the page scroll normally */
+@media (max-width: 800px) {
+  .main { grid-template-columns: 1fr; }
+  .center-col,
+  .side-col { overflow-y: visible; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Header stats — stacked value/label pairs in a grouped container.
+   The previous single flat row of five equal-weight items read as
+   monotonous with no hierarchy.
+   ══════════════════════════════════════════════════════════════ */
+
+.stats-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0.15rem 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.stats-strip .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0.2rem 0.7rem;
+  min-width: 3.9rem;
+}
+
+/* Hairline dividers rather than gaps, so it reads as one instrument cluster */
+.stats-strip .stat + .stat {
+  border-left: 1px solid var(--border);
+}
+
+.stats-strip dt {
+  order: 2;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  line-height: 1.3;
+}
+
+/* Icons are decorative here; the label text carries the meaning */
+.stats-strip dt span { margin-right: 0.15rem; }
+
+.stats-strip dd {
+  order: 1;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.stats-strip .stat-bad dd { color: var(--hot); }
+
+@media (max-width: 1100px) {
+  /* Drop the two least critical readouts before hiding the cluster entirely */
+  .stats-strip .stat:nth-child(4),
+  .stats-strip .stat:nth-child(5) { display: none; }
+}
+
+@media (max-width: 860px) {
+  .stats-strip { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Short-viewport pass
+   The column previously needed ~650px of height at 100% zoom, which
+   overflowed windows around 500px tall and forced zooming out to see
+   the anvil. Controls now share rows and the stack is tighter.
+   ══════════════════════════════════════════════════════════════ */
+
+.duration-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.duration-presets { gap: 0.3rem; }
+
+.duration-chip { padding: 0.34rem 0.6rem; font-size: 0.74rem; }
+
+.stepper-btn { width: 30px; min-height: 28px; font-size: 1rem; }
+.stepper-value { min-width: 56px; font-size: 0.78rem; }
+
+.center-col { gap: 0.4rem; padding: 0.75rem 1.25rem 1rem; }
+
+.timer-guidance { font-size: 0.78rem; min-height: 0; }
+
+.gauge-track { height: 16px; }
+.gauge-scale { font-size: 0.55rem; }
+
+.btn-primary { padding: 0.7rem 1.75rem; }
+
+.duration-reward { font-size: 0.68rem; }
+
+/* Very short windows: shrink the art further and drop the gauge scale text */
+@media (max-height: 560px) {
+  .forge-visual { height: clamp(6.5rem, 28dvh, 12rem); }
+  .timer-display { font-size: 2.5rem; }
+  .gauge-scale { display: none; }
+  .center-col { gap: 0.3rem; }
+}
+
+@media (max-height: 440px) {
+  .forge-visual { height: clamp(5rem, 22dvh, 9rem); }
+  .timer-display { font-size: 2rem; }
+}
+
+
+/* ─── Login ─── */
+
+.login-backdrop {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: var(--bg);
+  position: relative;
+}
+
+.login-theme-toggle {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+}
+
+.login-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem 2rem;
+}
+
+.login-brand {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-align: center;
+  margin-bottom: 0.25rem;
+}
+
+.login-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.login-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.login-input {
+  padding: 0.75rem 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.login-input:focus { border-color: var(--ember); }
+.login-input:disabled { opacity: 0.5; }
+
+.login-btn {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  background: var(--hot);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+  box-shadow: 0 4px 20px rgba(255, 87, 51, 0.25);
+}
+
+.login-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.login-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.78rem;
+  color: #ef4444;
+}
+
+
+/* ─── Challenge XP reward ─── */
+
+.ch-xp {
+  display: block;
+  font-style: normal;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--ember);
+}

@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+.aws-sam/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+functions/**/dist/
+
+# Environment & secrets
+.env
+frontend/.env
+env.json.local
+
+# SAM
+samconfig.toml
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+docker-data/
+
+# Test coverage
+coverage/
