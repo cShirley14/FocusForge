@@ -73,10 +73,10 @@ and [Cognito security best practices](https://docs.aws.amazon.com/cognito/latest
 - **No secrets in source**: `just test-secrets` runs [TruffleHog](https://github.com/trufflesecurity/trufflehog), [Gitleaks](https://github.com/gitleaks/gitleaks), and [detect-secrets](https://github.com/Yelp/detect-secrets).
 
 **Audited against:**
-- [OWASP Top 10 Web (2021)](https://owasp.org/Top10/2021/)
-- [OWASP API Security Top 10 (2023)](https://owasp.org/API-Security/editions/2023/en/0x00-toc/)
-- [OWASP Top 10 for LLM Applications (2025)](https://genai.owasp.org/llm-top-10/)
-- [OWASP Serverless Top 10](https://github.com/OWASP/Serverless-Top-10-Project)
+- OWASP Top 10 Web
+- OWASP API Security Top 10
+- OWASP Top 10 for LLM Applications
+- OWASP Serverless Top 10
 
 ## Prerequisites
 
