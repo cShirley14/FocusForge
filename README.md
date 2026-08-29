@@ -7,19 +7,39 @@ early and the piece is ruined.
 Originally built for the [AWS Builder Center Full Stack Challenge](https://builder.aws.com/content/3HsR4HTQTmLr0rfB6eP9umSnrEQ/the-full-stack-challenge).
 Random word: **Anvil**.
 
+## Features
+
+- **Focus sessions** from 1 to 120 minutes, with presets and 30-second stepping.
+  Rarity of the forged piece is gated on session length, so longer commitments
+  pay better.
+- **Progression**: XP, seven ranks, eight badges, rotating weekly challenges,
+  collection sets, and personal bests.
+- **Loss aversion, scoped**: quenching a session early ruins the piece and
+  resets the streak. Rank never decays, so ordinary life is not punished.
+- **Forge Master (AI)**: sizes your unsized tasks, *or* takes a free-text
+  brain-dump and returns an ordered plan for the day, deepest work first, each
+  step sized with a reason. One click adds the plan to the queue as sized tasks.
+- **Cooldown you control**: choose the length (3/5/10/15m), start it when you
+  want, skip it, or opt into auto-start. Available any time, not only after a
+  session. The heat gauge and glowing workpiece run in reverse while cooling.
+- **Themes**: Forge (dark) and Daybreak (light), persisted, WCAG AA checked.
+
 ## Architecture
 
 Single SAM stack. One `sam delete` removes everything.
 
+Two independent paths: static assets via CloudFront, API calls straight to the
+gateway. CloudFront has a single S3 origin and does **not** proxy the API, which
+is why the API's CORS policy has to allow the CloudFront domain as an origin.
+
 ```mermaid
 graph LR
-    User([User]) --> CF[CloudFront<br/>HTTPS]
+    User([User]) -->|page load| CF[CloudFront<br/>HTTPS + OAC]
     CF --> S3[S3 Bucket<br/>Frontend]
-    User --> CF
-    CF -.-> APIGW
 
-    User --> APIGW[HTTP API Gateway<br/>JWT Authorizer]
-    APIGW --> Cognito[Cognito<br/>User Pool]
+    User -->|"fetch, Bearer JWT"| APIGW[HTTP API Gateway<br/>JWT Authorizer]
+    APIGW -.->|validates token against| Cognito[Cognito<br/>User Pool]
+
     APIGW --> CreateTask[λ Create Task]
     APIGW --> ListTasks[λ List Tasks]
     APIGW --> UpdateTask[λ Update Task]
@@ -31,7 +51,7 @@ graph LR
     UpdateTask --> DDB
     DeleteTask --> DDB
     ForgeMaster --> DDB
-    ForgeMaster --> Bedrock[Bedrock<br/>Nova Micro]
+    ForgeMaster --> Bedrock[Bedrock Nova Micro<br/>+ Guardrail]
 ```
 
 **AWS services:** CloudFront, S3, API Gateway (HTTP), Lambda, DynamoDB,
@@ -221,8 +241,8 @@ sam delete --no-prompts
 │   └── .env.example    Frontend env template
 ├── functions/          Lambda handlers (TypeScript, esbuild-bundled)
 │   ├── tasks/          CRUD: create, list, update, delete
-│   └── forge-master/   AI task sizing via Bedrock Nova Micro
-├── scripts/            Shell helpers (create-user, get-token, infra checks)
+│   └── forge-master/   AI task sizing + day planning via Bedrock Nova Micro
+├── scripts/            Shell helpers (create-user, get-token, smoke tests)
 ├── template.yaml       SAM/CloudFormation: the entire infrastructure
 ├── justfile            Command runner recipes
 ├── shell.nix           NixOS reproducible dev environment
