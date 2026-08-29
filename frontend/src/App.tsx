@@ -158,6 +158,29 @@ export function App({ onSignOut }: { onSignOut: () => void }) {
     });
   };
 
+  /** Adds a batch of planned steps as sized tasks (Forge Plan → queue). */
+  const addPlannedTasks = (steps: Array<{ title: string; minutes: number }>) => {
+    for (const step of steps) {
+      const tempId = crypto.randomUUID();
+      setTasks((prev) => [
+        ...prev,
+        { id: tempId, title: step.title, estimatedMinutes: step.minutes },
+      ]);
+      api
+        .createTask(step.title)
+        .then((created) => {
+          setTasks((prev) =>
+            prev.map((t) => (t.id === tempId ? { ...t, id: created.taskId } : t))
+          );
+          // Persist the estimate so it survives logout.
+          api.updateTask(created.taskId, { estimatedMinutes: step.minutes }).catch(() => {});
+        })
+        .catch(() => {
+          setTasks((prev) => prev.filter((t) => t.id !== tempId));
+        });
+    }
+  };
+
   const deleteTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     if (activeTaskId === taskId) setActiveTaskId(null);
@@ -357,17 +380,50 @@ export function App({ onSignOut }: { onSignOut: () => void }) {
               onStart={() => timer.start()}
               onStop={timer.stop}
               onSkipBreak={timer.reset}
+              onStartBreak={timer.startBreak}
+              onSkipCooldown={timer.skipCooldown}
+              onEnterCooldown={timer.enterCooldown}
+              breakSeconds={timer.breakSeconds}
             />
             <HeatGauge
               progress={timer.progress}
               state={timer.state}
               sessionSeconds={timer.sessionSeconds}
             />
-            <DurationPicker
-              seconds={timer.sessionSeconds}
-              disabled={timer.state !== "idle"}
-              onChange={timer.setDuration}
-            />
+            {timer.state === "cooldown-ready" || timer.state === "break" ? (
+              <>
+                <DurationPicker
+                  mode="cooldown"
+                  seconds={timer.breakSeconds}
+                  disabled={timer.state === "break"}
+                  onChange={timer.setBreakDuration}
+                />
+                {/* Shown in both cooldown states so a user who enabled
+                    auto-start (and thus skips cooldown-ready) can still turn
+                    it back off during the break. */}
+                <label className="switch-row">
+                  <span className="switch-label">
+                    Auto-start cooldown next time
+                  </span>
+                  <span className="switch">
+                    <input
+                      type="checkbox"
+                      checked={timer.autoStartBreak}
+                      onChange={(e) => timer.setAutoStartBreak(e.target.checked)}
+                    />
+                    <span className="switch-track" aria-hidden="true">
+                      <span className="switch-thumb" />
+                    </span>
+                  </span>
+                </label>
+              </>
+            ) : (
+              <DurationPicker
+                seconds={timer.sessionSeconds}
+                disabled={timer.state !== "idle"}
+                onChange={timer.setDuration}
+              />
+            )}
           </div>
 
           <aside className="side-col">
@@ -375,8 +431,10 @@ export function App({ onSignOut }: { onSignOut: () => void }) {
               <ForgeMaster
                 tasks={tasks}
                 activeTaskId={activeTaskId}
+                isForging={timer.state === "focus"}
                 stats={badgeStats}
                 onApplyEstimates={applyEstimates}
+                onAddPlannedTasks={addPlannedTasks}
               />
             )}
             <TaskList

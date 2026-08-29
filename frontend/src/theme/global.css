@@ -365,6 +365,45 @@ body {
   box-shadow: none;
 }
 
+/* Cool sibling of btn-primary — the cooldown counterpart to "Start forging". */
+.btn-cool {
+  padding: 0.9rem 2.5rem;
+  background: var(--cool);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #06232e;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 4px 24px color-mix(in oklab, var(--cool) 35%, transparent);
+}
+
+.btn-cool:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 32px color-mix(in oklab, var(--cool) 45%, transparent);
+}
+
+.btn-cool:active:not(:disabled) { transform: translateY(0); }
+
+/* Subtle sibling for the idle "Cooldown" affordance — cool-tinted but quieter
+   than btn-cool, so it complements rather than competes with Start forging. */
+.btn-cool-ghost {
+  padding: 0.9rem 1.5rem;
+  background: color-mix(in oklab, var(--cool) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--cool) 40%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--cool);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-cool-ghost:hover {
+  background: color-mix(in oklab, var(--cool) 20%, transparent);
+}
+
 .btn-secondary {
   padding: 0.9rem 2.5rem;
   background: var(--surface);
@@ -728,6 +767,8 @@ body {
 .timer-buttons {
   display: flex;
   gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .timer-warning {
@@ -1320,7 +1361,103 @@ body {
   transition: filter 0.15s;
 }
 
-.btn-forge-master:hover { filter: brightness(1.08); }
+.btn-forge-master:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-forge-master:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Forge Master: mode toggle + Forge Plan ─── */
+
+.fm-modes {
+  display: flex;
+  gap: 0.35rem;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.fm-mode {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 3px);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.fm-mode.active {
+  background: var(--surface-elevated);
+  color: var(--text);
+}
+
+.fm-plan { display: flex; flex-direction: column; gap: 0.65rem; }
+
+.fm-braindump {
+  width: 100%;
+  resize: vertical;
+  min-height: 5.5rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.fm-braindump:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.fm-braindump::placeholder { color: var(--text-3); }
+
+.fm-plan-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+}
+
+.fm-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.fm-plan-order {
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  color: var(--ember);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fm-plan-body {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+  font-size: 0.8rem;
+}
+
+.fm-plan-title { color: var(--text); font-weight: 600; }
+.fm-plan-body em { font-style: normal; font-size: 0.72rem; color: var(--text-3); }
+
+.fm-plan-error { font-size: 0.76rem; color: var(--hot); }
 
 .fm-loading {
   display: flex;
@@ -1478,6 +1615,82 @@ body {
 }
 
 .duration-reward strong { color: var(--r); font-weight: 700; }
+
+/* ─── Cooldown (context view of the duration picker) ─── */
+
+.duration-reward-cool { color: var(--cool); }
+
+/* Pill toggle switch — replaces the raw checkbox, which looked unfinished
+   against the rest of the crafted UI. The native <input> stays (keyboard +
+   screen-reader accessible) but is visually hidden; the track/thumb are drawn. */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: 0.76rem;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--ring-track);
+  border: 1px solid var(--border);
+  transition: background 0.2s ease, border-color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.switch-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.switch input:checked + .switch-track {
+  background: color-mix(in oklab, var(--cool) 32%, transparent);
+  border-color: color-mix(in oklab, var(--cool) 55%, transparent);
+}
+
+.switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(15px);
+  background: var(--cool);
+}
+
+/* Visible keyboard focus ring for accessibility */
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--cool);
+  outline-offset: 2px;
+}
+
+/* Cool-tint the preset chips while sizing a cooldown, so the mode reads at a
+   glance without a separate label. */
+.duration-picker.is-cooldown .duration-chip.active {
+  border-color: color-mix(in oklab, var(--cool) 60%, transparent);
+  color: var(--cool);
+}
 
 /* ─── Rank panel ─── */
 
@@ -1657,10 +1870,9 @@ body {
   box-shadow: 0 0 6px color-mix(in oklab, #ff6b2c 60%, transparent);
 }
 
-.gauge.cooling .gauge-seg.lit {
-  background: var(--cool);
-  box-shadow: 0 0 6px color-mix(in oklab, var(--cool) 50%, transparent);
-}
+/* Cooldown keeps the real heat-ramp colours (dull-red → white by position) and
+   simply drains from the white end — a hot bar cooling, not a separate blue
+   meter. The reversed fill direction is handled in HeatGauge. */
 
 .gauge-scale {
   display: flex;
@@ -2050,16 +2262,71 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .duration-picker { width: 100%; max-width: 21rem; }
 
-/* Sidebar scrolls independently of the page */
+/* Sidebar scrolls independently of the page.
+ *
+ * `min-height: 0` is load-bearing: a grid item defaults to `min-height: auto`
+ * ("at least as tall as content"), which Chrome enforces strictly — the column
+ * grows to fit every stacked panel and `overflow-y: auto` never engages, so the
+ * page scrolls instead of the sidebar. Firefox is lenient here, which is why the
+ * bug only showed in Chrome. Resetting the implied minimum lets the grid track
+ * bound the column and hands scrolling back to the sidebar itself.
+ * See CSS Grid spec §6.2 "Automatic Minimum Size of Grid Items". */
 .side-col {
   overflow-y: auto;
+  overflow-x: hidden; /* vertical scroll shouldn't imply a horizontal bar */
   max-height: none;
+  min-height: 0;
+  min-width: 0;
 }
 
 @media (min-width: 1600px) {
   .forge-visual { width: min(100%, 24rem); max-width: 24rem; }
   .gauge { width: min(24rem, 100%); }
   .duration-picker { max-width: 24rem; }
+}
+
+/*
+ * Themed scrollbars. Chrome's default is a chunky opaque gray bar that clashes
+ * with the dark forge surface; Firefox's default is already subtle, which is
+ * why the ugliness only showed in Chrome. Firefox uses the standard
+ * `scrollbar-*` properties; WebKit/Blink needs the `::-webkit-scrollbar`
+ * pseudo-elements. Both drive off theme tokens so light/dark adapt for free.
+ */
+.side-col,
+.center-col {
+  scrollbar-width: thin;                        /* Firefox */
+  scrollbar-color: var(--border) transparent;   /* thumb, track */
+}
+.side-col::-webkit-scrollbar,
+.center-col::-webkit-scrollbar {
+  width: 8px;
+}
+.side-col::-webkit-scrollbar-track,
+.center-col::-webkit-scrollbar-track {
+  background: transparent;
+}
+.side-col::-webkit-scrollbar-thumb,
+.center-col::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.side-col::-webkit-scrollbar-thumb:hover,
+.center-col::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+
+/*
+ * Desktop two-column layout: pin the outer chain to the viewport so only the
+ * columns scroll. Without this, `.app` (min-height: 100dvh) and `body`
+ * (min-height: 100vh) let the *document* grow taller than the `.app-shell`,
+ * producing a second, page-level scrollbar on top of the sidebar's own — the
+ * "two scrollbars in Chrome" bug. Scoped to ≥801px so the small-screen
+ * graceful-scroll fallback below (and the zoom behaviour the shell comment
+ * describes) is untouched.
+ */
+@media (min-width: 801px) {
+  html, body { height: 100%; overflow: hidden; }
+  .app { height: 100dvh; min-height: 0; overflow: hidden; }
 }
 
 /* Below the two-column breakpoint, stack and let the page scroll normally */

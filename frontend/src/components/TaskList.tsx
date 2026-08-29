@@ -4,7 +4,7 @@ import type { Task } from "../App.js";
 interface TaskListProps {
   tasks: Task[];
   activeTaskId: string | null;
-  timerState: "idle" | "focus" | "break";
+  timerState: "idle" | "focus" | "cooldown-ready" | "break";
   onAdd: (title: string) => void;
   onSelect: (taskId: string) => void;
   onDelete: (taskId: string) => void;

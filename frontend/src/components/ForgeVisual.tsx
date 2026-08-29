@@ -4,7 +4,7 @@ import type { Rarity } from "../lib/progression.js";
 
 interface ForgeVisualProps {
   progress: number; // 1 = full time left, 0 = timer done
-  state: "idle" | "focus" | "break";
+  state: "idle" | "focus" | "cooldown-ready" | "break";
   taskTitle: string | null;
   mode: "forge" | "daybreak";
   /** Tier of the currently planned session — sizes the workpiece. */
@@ -25,9 +25,16 @@ export function ForgeVisual({
   mode,
   rarity,
 }: ForgeVisualProps) {
-  const heat = state === "focus" ? 1 - progress : 0;
   const isActive = state === "focus";
+  const isCooling = state === "break";
   const isNight = mode === "forge";
+
+  // Focus heats the workpiece (0 → 1 over the session). Cooldown reverses it:
+  // the piece starts hot and cools (progress 1 → 0). Everything colour/glow
+  // related reads off this single value; only the *work* animations (hammer,
+  // sparks, rising embers) are gated on `isActive`, since a cooldown is a rest.
+  const heat = isActive ? 1 - progress : isCooling ? progress : 0;
+  const glowing = isActive || isCooling;
 
   // A longer commitment puts a visibly bigger billet on the anvil.
   const stock = {
@@ -53,19 +60,20 @@ export function ForgeVisual({
     [isNight]
   );
 
-  // Workpiece colour: cold iron at rest, then through the forging heats.
+  // Workpiece colour: cold iron at rest, then through the forging heats. During
+  // cooldown it runs the same ramp backwards as `heat` drains to 0.
   const metalColor = useMemo(() => {
-    if (!isActive) return isNight ? "#5a5048" : "#8d949c";
+    if (!glowing) return isNight ? "#5a5048" : "#8d949c";
     if (heat < 0.3) return "#a44a1a";
     if (heat < 0.6) return "#e85d04";
     if (heat < 0.85) return "#ffba08";
     return "#fff3b0";
-  }, [isActive, heat, isNight]);
+  }, [glowing, heat, isNight]);
 
-  const glowStdDev = isActive ? 3 + heat * 10 : 0;
+  const glowStdDev = glowing ? 3 + heat * 10 : 0;
 
-  // Banked coals at night; by day the forge is out until work starts.
-  const fireOpacity = isActive ? 0.55 + heat * 0.45 : isNight ? 0.16 : 0;
+  // Fire tracks heat while forging or cooling; banked coals at night otherwise.
+  const fireOpacity = glowing ? 0.55 + heat * 0.45 : isNight ? 0.16 : 0;
 
   const emberCount = isActive ? 12 + Math.floor(heat * 18) : 0;
 
@@ -287,7 +295,7 @@ export function ForgeVisual({
         </g>
 
         {/* ── Workpiece on the face — width tracks the session tier ── */}
-        <g filter={isActive ? "url(#ff-glow)" : undefined}>
+        <g filter={glowing ? "url(#ff-glow)" : undefined}>
           <rect
             x={212 - stock.w / 2}
             y={stock.y}
@@ -308,7 +316,7 @@ export function ForgeVisual({
             height="2"
             rx="1"
             fill="#fff"
-            opacity={isActive ? 0.3 : 0.16}
+            opacity={glowing ? 0.3 : 0.16}
             style={{ transition: "x 0.45s ease, width 0.45s ease, y 0.45s ease" }}
           />
         </g>

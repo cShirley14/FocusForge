@@ -56,16 +56,31 @@ export async function deleteTask(taskId: string): Promise<void> {
 
 // ─── Forge Master ───────────────────────────────────────────────────────────
 
+export interface PlanStep {
+  order: number;
+  title: string;
+  minutes: number;
+  reason: string;
+}
+
 export interface ForgePlan {
   estimates?: Array<{
     title: string;
     minutes: number;
     why: string;
   }>;
+  /** Present when the request supplied a brain-dump — an ordered session plan. */
+  plan?: PlanStep[];
   tip?: string;
   _fallback?: boolean;
 }
 
+/** Sizes the user's stored, unsized tasks. */
 export async function invokeForgeMaster(): Promise<ForgePlan> {
   return request<ForgePlan>("POST", "/forge");
+}
+
+/** Turns a free-text brain-dump into an ordered plan of focus sessions. */
+export async function invokeForgePlan(brainDump: string): Promise<ForgePlan> {
+  return request<ForgePlan>("POST", "/forge", { brainDump });
 }

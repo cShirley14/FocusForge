@@ -4,7 +4,7 @@ import { formatTotal } from "../lib/progression.js";
 interface HeatGaugeProps {
   /** 1 = full time remaining, 0 = done. */
   progress: number;
-  state: "idle" | "focus" | "break";
+  state: "idle" | "focus" | "cooldown-ready" | "break";
   /** Total planned session length in seconds, for the scale label. */
   sessionSeconds: number;
 }
@@ -19,10 +19,15 @@ const SEGMENTS = 44;
  * merely how much clock is left.
  */
 export function HeatGauge({ progress, state, sessionSeconds }: HeatGaugeProps) {
-  const isIdle = state === "idle";
+  const isIdle = state === "idle" || state === "cooldown-ready";
   const isBreak = state === "break";
-  const heat = isIdle ? 0 : 1 - progress;
-  const litCount = Math.round(heat * SEGMENTS);
+
+  // One continuous hot bar, always anchored at the cold (left) end and coloured
+  // by position (dull-red → white). Focus grows it toward white; cooldown starts
+  // full and shrinks it, so the white tip fades first and the metal cools back
+  // down to red then dark — the heat ramp simply run in reverse.
+  const fill = isIdle ? 0 : isBreak ? progress : 1 - progress;
+  const litCount = Math.round(fill * SEGMENTS);
 
   const segments = useMemo(
     () =>
@@ -33,17 +38,19 @@ export function HeatGauge({ progress, state, sessionSeconds }: HeatGaugeProps) {
     [litCount]
   );
 
+  const heatPct = Math.round(fill * 100);
+
   return (
     <div
       className={`gauge ${isBreak ? "cooling" : ""} ${isIdle ? "cold" : ""}`}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(heat * 100)}
+      aria-valuenow={heatPct}
       aria-label={
         isBreak
-          ? "Cooling period"
-          : `Working heat, ${Math.round(heat * 100)} percent through the session`
+          ? `Cooling down, ${heatPct} percent heat remaining`
+          : `Working heat, ${heatPct} percent through the session`
       }
     >
       <div className="gauge-track" aria-hidden="true">
