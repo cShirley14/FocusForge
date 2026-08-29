@@ -8,11 +8,18 @@ import {
   rarityForDuration,
   RARITY_LABEL,
 } from "../lib/progression.js";
+import { BREAK_PRESETS } from "../hooks/useTimer.js";
 
 interface DurationPickerProps {
   seconds: number;
   disabled: boolean;
   onChange: (seconds: number) => void;
+  /**
+   * "focus" sizes the forging session; "cooldown" sizes the rest that follows.
+   * The same control does double duty so the column never stacks two picker
+   * rows — it simply re-labels for the moment that matters.
+   */
+  mode?: "focus" | "cooldown";
 }
 
 /**
@@ -22,7 +29,14 @@ interface DurationPickerProps {
  * unstyleable across browsers and looked out of place. Stepping is explicit
  * and keyboard-operable via the buttons.
  */
-export function DurationPicker({ seconds, disabled, onChange }: DurationPickerProps) {
+export function DurationPicker({
+  seconds,
+  disabled,
+  onChange,
+  mode = "focus",
+}: DurationPickerProps) {
+  const isCooldown = mode === "cooldown";
+  const presets = isCooldown ? BREAK_PRESETS : DURATION_PRESETS;
   const rarity = rarityForDuration(seconds / 60);
   const atMin = seconds <= MIN_SECONDS;
   const atMax = seconds >= MAX_SECONDS;
@@ -30,12 +44,16 @@ export function DurationPicker({ seconds, disabled, onChange }: DurationPickerPr
   const step = (delta: number) => onChange(normalizeSeconds(seconds + delta));
 
   return (
-    <div className="duration-picker">
+    <div className={`duration-picker ${isCooldown ? "is-cooldown" : ""}`}>
       {/* Presets and stepper share one row to keep the column short on
           short viewports; wraps only when there genuinely isn't width. */}
       <div className="duration-row">
-        <div className="duration-presets" role="group" aria-label="Session length presets">
-          {DURATION_PRESETS.map((m) => {
+        <div
+          className="duration-presets"
+          role="group"
+          aria-label={isCooldown ? "Cooldown length presets" : "Session length presets"}
+        >
+          {presets.map((m) => {
             const secs = m * 60;
             return (
               <button
@@ -52,7 +70,11 @@ export function DurationPicker({ seconds, disabled, onChange }: DurationPickerPr
           })}
         </div>
 
-        <div className="stepper" role="group" aria-label="Adjust session length">
+        <div
+          className="stepper"
+          role="group"
+          aria-label={isCooldown ? "Adjust cooldown length" : "Adjust session length"}
+        >
         <button
           type="button"
           className="stepper-btn"
@@ -79,9 +101,15 @@ export function DurationPicker({ seconds, disabled, onChange }: DurationPickerPr
         </div>
       </div>
 
-      <p className={`duration-reward rarity-${rarity}`}>
-        Yields a <strong>{RARITY_LABEL[rarity]}</strong> piece
-      </p>
+      {isCooldown ? (
+        <p className="duration-reward duration-reward-cool">
+          Rest, then back to the forge
+        </p>
+      ) : (
+        <p className={`duration-reward rarity-${rarity}`}>
+          Yields a <strong>{RARITY_LABEL[rarity]}</strong> piece
+        </p>
+      )}
     </div>
   );
 }

@@ -108,6 +108,8 @@ just bootstrap
 # 3. Create yourself as a user
 just create-user you@example.com
 just set-password you@example.com 'Your!Long#Passphrase42'
+# Or omit the password and one will be generated and printed once:
+#   just set-password you@example.com
 
 # 4. Deploy the frontend (auto-reads stack outputs, builds, syncs, invalidates cache)
 just deploy-frontend
@@ -117,8 +119,10 @@ just infra-status
 # Open the FrontendUrl in your browser
 ```
 
-That's it. No S3 buckets to create manually, no `.env` files to edit, no IDs
-to copy between steps. Everything resolves dynamically from the stack.
+That's it. No S3 buckets to create manually, no `.env` files to hand-edit, no
+IDs to copy between steps. Everything resolves dynamically from the stack —
+`deploy-frontend` writes `frontend/.env`, and `just sync-env` regenerates the
+root `.env` (non-secret stack outputs) whenever the stack changes.
 
 **Subsequent deploys:** `just infra-up && just deploy-frontend`
 
@@ -145,8 +149,12 @@ just test-frontend    # Vitest unit tests (progression logic)
 just test-audit       # npm audit for known dependency vulnerabilities
 just test-secrets     # TruffleHog + Gitleaks + detect-secrets scanning
 
-# Integration test (requires deployed stack + AWS session)
+# Smoke tests against the deployed stack (requires an AWS session).
+# These curl the live API and assert on invariants. They are not a browser
+# end-to-end suite and they do not run in CI.
 just infra-test       # Asserts unauthenticated requests get 401
+just test-rate-limit  # Creates a temp user, exhausts the daily AI limit, expects 429
+just test-forge-plan  # Sends a brain-dump, asserts an ordered plan comes back
 
 # Manual smoke test (full loop)
 just get-token you@example.com  # Get a JWT
@@ -165,10 +173,12 @@ just infra-status       # Show every stack resource
 just infra-down         # Destroy the stack
 just infra-verify       # Confirm no orphan resources
 just deploy-frontend    # Build frontend + sync to S3 + invalidate cache
+just sync-env           # Regenerate root .env from stack outputs (non-secret)
 just panic              # Emergency teardown (removes everything including logs)
 
 just create-user EMAIL          # Create a Cognito user
 just set-password EMAIL PASS    # Set a permanent password
+just set-password EMAIL         # Generate a strong password and print it once
 just get-token EMAIL            # Get a JWT for API testing
 just reset-forge-limit EMAIL    # Clear today's AI rate limit
 just reset-user-data EMAIL      # Wipe all data for a user (fresh start)
@@ -179,7 +189,8 @@ just test-a11y          # axe-core accessibility audit
 just test-frontend      # Vitest unit tests (progression logic)
 just test-audit         # npm audit for known vulnerabilities
 just test-secrets       # Scan for leaked secrets (trufflehog + gitleaks + detect-secrets)
-just test-rate-limit    # Integration test: verify Forge Master 429 on limit
+just test-rate-limit    # Smoke test: verify Forge Master 429 once the daily limit is hit
+just test-forge-plan    # Smoke test: verify a brain-dump returns an ordered plan
 ```
 
 ## Teardown

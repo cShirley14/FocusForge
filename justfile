@@ -130,6 +130,10 @@ infra-status:
 infra-test:
     @bash scripts/infra-test.sh
 
+# Smoke-test the Forge Plan endpoint (brain-dump → ordered plan)
+test-forge-plan:
+    @bash scripts/test-forge-plan.sh
+
 # Test the Forge Master rate limit (creates temp user, hits limit, verifies 429, cleans up)
 test-rate-limit:
     #!/usr/bin/env bash
@@ -149,7 +153,10 @@ test-rate-limit:
     # EFF Diceware (https://www.eff.org/dice)
     # CISA 16+ chars (https://www.cisa.gov/resources-tools/training/formulate-strong-passwords-and-pin-codes)
     # 6 words (~77.5 bits entropy) + 3 random specials injected by CSPRNG
-    TEST_PASS="$(diceware -n 6 -s 3)$((RANDOM % 10))"
+    # No `-s` random specials: they can emit `"` or `\`, which break the JSON
+    # auth-parameters built below. A digit + fixed safe symbols satisfy the
+    # Cognito policy without risking quoting bugs.
+    TEST_PASS="$(diceware -n 6)$((RANDOM % 10))-Aa"
     # Guarantee cleanup on any exit (success, failure, or signal)
     cleanup() {
       echo "── Cleaning up test user ──"
@@ -164,8 +171,9 @@ test-rate-limit:
       --region "$REGION" --no-cli-pager > /dev/null
     aws cognito-idp admin-set-user-password --user-pool-id "$POOL_ID" \
       --username "$TEST_EMAIL" --password "$TEST_PASS" --permanent --region "$REGION"
-    # Get token (use JSON format to avoid special char parsing issues in shorthand)
-    AUTH_PARAMS=$(printf '{"USERNAME":"%s","PASSWORD":"%s"}' "$TEST_EMAIL" "$TEST_PASS")
+    # Build with jq rather than printf so any special characters are escaped.
+    AUTH_PARAMS=$(jq -n --arg u "$TEST_EMAIL" --arg p "$TEST_PASS" \
+      '{USERNAME: $u, PASSWORD: $p}')
     TOKEN=$(aws cognito-idp initiate-auth --client-id "$CLIENT_ID" \
       --auth-flow USER_PASSWORD_AUTH \
       --auth-parameters "$AUTH_PARAMS" \
@@ -175,19 +183,22 @@ test-rate-limit:
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"title":"Rate limit test task"}' > /dev/null
-    # Hit the rate limit (5 calls + 1 that should fail)
-    echo "── Calling /forge 6 times (limit is 5) ──"
-    for i in $(seq 1 6); do
+    # Read the limit straight from the Lambda source so this test can't drift
+    # out of sync with it (it previously hard-coded 5 and silently passed).
+    LIMIT=$(grep -oP 'const DAILY_LIMIT = \K[0-9]+' functions/forge-master/index.ts)
+    OVER=$((LIMIT + 1))
+    echo "── Calling /forge $OVER times (limit is $LIMIT) ──"
+    for i in $(seq 1 "$OVER"); do
       STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/forge" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json")
       echo "  Call $i: HTTP $STATUS"
-      if [ "$i" -eq 6 ] && [ "$STATUS" != "429" ]; then
-        echo "  ❌ Expected 429 on call 6, got $STATUS"
+      if [ "$i" -eq "$OVER" ] && [ "$STATUS" != "429" ]; then
+        echo "  ❌ Expected 429 on call $OVER, got $STATUS"
         exit 1
       fi
     done
-    echo "  ✅ Rate limit enforced (429 on call 6)"
+    echo "  ✅ Rate limit enforced (429 on call $OVER)"
     echo "✅ Rate limit test passed."
 
 # Destroy the entire stack (removes all AWS resources)
@@ -251,20 +262,39 @@ panic:
 create-user email:
     @bash scripts/create-user.sh {{email}}
 
-# Set a permanent password for a user
-set-password email password:
+# Set a permanent password for a user.
+# Pass one explicitly, or omit it to generate a strong one and print it once.
+set-password email password='':
     #!/usr/bin/env bash
     set -euo pipefail
+    REGION="${AWS_REGION:-us-east-1}"
     POOL_ID=$(aws cloudformation describe-stacks --stack-name focusforge \
       --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
-      --output text --region us-east-1)
+      --output text --region "$REGION")
+    PASSWORD='{{password}}'
+    GENERATED=0
+    if [ -z "$PASSWORD" ]; then
+      # EFF Diceware (https://www.eff.org/dice): 6 words (~77.5 bits entropy)
+      # plus a digit and safe symbols. Satisfies the Cognito policy (12+ chars,
+      # mixed case, number, symbol). Avoids diceware's `-s` random specials,
+      # which can emit `"` or `\` and break JSON/shell quoting downstream.
+      PASSWORD="$(diceware -n 6)$((RANDOM % 10))-Aa"
+      GENERATED=1
+    fi
     aws cognito-idp admin-set-user-password \
       --user-pool-id "$POOL_ID" \
       --username "{{email}}" \
-      --password '{{password}}' \
+      --password "$PASSWORD" \
       --permanent \
-      --region us-east-1
+      --region "$REGION"
     echo "✅ Password set for {{email}}"
+    if [ "$GENERATED" -eq 1 ]; then
+      echo ""
+      echo "   Generated password (save it in your password manager — not stored on disk):"
+      echo ""
+      echo "   $PASSWORD"
+      echo ""
+    fi
 
 # Get a JWT token for API testing
 get-token email:
@@ -320,6 +350,35 @@ reset-user-data email:
     echo "To also reset progress (XP, streak, smithy), click the 🗑️ button in the app header."
 
 # ─── Build & Package ─────────────────────────────────────────────────────────
+
+# Regenerate root .env from stack outputs (non-secret config only)
+sync-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REGION="${AWS_REGION:-us-east-1}"
+    STACK="${STACK_NAME:-focusforge}"
+    OUTPUTS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+      --query "Stacks[0].Outputs" --output json --region "$REGION")
+    API_URL=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="ApiUrl") | .OutputValue')
+    POOL_ID=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolId") | .OutputValue')
+    CLIENT_ID=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue')
+    cat > .env <<EOF
+    # AWS Region for deployment
+    AWS_REGION=$REGION
+
+    # Stack name (matches samconfig.toml)
+    STACK_NAME=$STACK
+
+    # Stage
+    STAGE=dev
+
+    # Stack outputs — regenerated by \`just sync-env\`. Non-secret: the client ID
+    # and API URL also ship in the frontend bundle. Do not hand-edit; re-run sync.
+    API_URL=$API_URL
+    USER_POOL_ID=$POOL_ID
+    USER_POOL_CLIENT_ID=$CLIENT_ID
+    EOF
+    echo "✅ .env regenerated from stack outputs"
 
 # Build frontend for production
 build-frontend:

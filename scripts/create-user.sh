@@ -31,12 +31,8 @@ aws cognito-idp admin-create-user \
   --region "$REGION" \
   --no-cli-pager
 
-echo "✅ User created. Check email for temporary password."
+echo "✅ User created."
 echo ""
-echo "To set a permanent password:"
-echo "  aws cognito-idp admin-set-user-password \\"
-echo "    --user-pool-id $USER_POOL_ID \\"
-echo "    --username $EMAIL \\"
-echo "    --password 'YourSecurePassword123!' \\"
-echo "    --permanent \\"
-echo "    --region $REGION"
+echo "Set a permanent password:"
+echo "  just set-password $EMAIL 'YourPassphrase'   # your own, or"
+echo "  just set-password $EMAIL                     # generate + print one"

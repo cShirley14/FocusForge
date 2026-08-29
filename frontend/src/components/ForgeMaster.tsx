@@ -4,15 +4,20 @@ import {
   RARITY_LABEL,
   type BadgeStats,
 } from "../lib/progression.js";
-import { invokeForgeMaster } from "../lib/api.js";
+import { invokeForgeMaster, invokeForgePlan, type PlanStep } from "../lib/api.js";
 import type { Task } from "../App.js";
 
 interface ForgeMasterProps {
   tasks: Task[];
   activeTaskId: string | null;
+  /** True only while a session is actively running — a task mid-forge is the
+   *  one case we skip re-sizing. Merely *selecting* a task must not exclude it. */
+  isForging: boolean;
   stats: BadgeStats;
   /** Writes sizing back onto the tasks, keyed by task id. */
   onApplyEstimates: (estimates: Record<string, number>) => void;
+  /** Adds planned steps to the queue as sized tasks (Forge Plan). */
+  onAddPlannedTasks: (steps: Array<{ title: string; minutes: number }>) => void;
 }
 
 interface Estimate {
@@ -34,10 +39,52 @@ interface Insight {
  * NOTE: generates locally for now. The deployed build calls POST /forge,
  * backed by Bedrock Nova Micro — see functions/forge-master/index.ts.
  */
-export function ForgeMaster({ tasks, activeTaskId, stats, onApplyEstimates }: ForgeMasterProps) {
+export function ForgeMaster({ tasks, activeTaskId, isForging, stats, onApplyEstimates, onAddPlannedTasks }: ForgeMasterProps) {
+  // A task is only off-limits for sizing while it's actively being forged.
+  const excludedId = isForging ? activeTaskId : null;
+  const unsizedCount = tasks.filter(
+    (t) => !t.estimatedMinutes && t.id !== excludedId
+  ).length;
   const [insight, setInsight] = useState<Insight | null>(null);
   const [loading, setLoading] = useState(false);
   const [applied, setApplied] = useState(false);
+
+  // ─── Forge Plan (brain-dump → ordered plan) ───
+  const [mode, setMode] = useState<"size" | "plan">("size");
+  const [brainDump, setBrainDump] = useState("");
+  const [plan, setPlan] = useState<PlanStep[] | null>(null);
+  const [planTip, setPlanTip] = useState("");
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planAdded, setPlanAdded] = useState(false);
+  const [planError, setPlanError] = useState("");
+
+  const runPlan = async () => {
+    if (!brainDump.trim()) return;
+    setPlanLoading(true);
+    setPlanError("");
+    setPlanAdded(false);
+    try {
+      const result = await invokeForgePlan(brainDump);
+      setPlan(result.plan || []);
+      setPlanTip(result.tip || "");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setPlanError(
+        message.includes("Daily forge limit")
+          ? "Daily limit reached. Resets tomorrow."
+          : "Couldn't reach the Forge Master. Try again."
+      );
+    }
+    setPlanLoading(false);
+  };
+
+  const addPlanToQueue = () => {
+    if (!plan?.length) return;
+    onAddPlannedTasks(
+      plan.map((s) => ({ title: s.title, minutes: s.minutes }))
+    );
+    setPlanAdded(true);
+  };
 
   const total = stats.kept + stats.ruined;
 
@@ -55,7 +102,7 @@ export function ForgeMaster({ tasks, activeTaskId, stats, onApplyEstimates }: Fo
     setApplied(false);
 
     // Only size tasks that don't already have an estimate and aren't actively being forged
-    const unsized = tasks.filter((t) => !t.estimatedMinutes && t.id !== activeTaskId);
+    const unsized = tasks.filter((t) => !t.estimatedMinutes && t.id !== excludedId);
     if (unsized.length === 0) {
       setInsight({
         estimates: [],
@@ -83,7 +130,7 @@ export function ForgeMaster({ tasks, activeTaskId, stats, onApplyEstimates }: Fo
         })
         .filter((e) => {
           const task = tasks.find((t) => t.id === e.taskId);
-          return task && !task.estimatedMinutes && task.id !== activeTaskId;
+          return task && !task.estimatedMinutes && task.id !== excludedId;
         });
 
       const rate = total > 0 ? Math.round((stats.kept / total) * 100) : null;
@@ -149,6 +196,110 @@ export function ForgeMaster({ tasks, activeTaskId, stats, onApplyEstimates }: Fo
         <span className="fm-badge">AI</span>
       </div>
 
+      {/* Two modes: size existing tasks, or plan a brain-dump. Additive — the
+          original sizing flow is the default and unchanged. */}
+      <div className="fm-modes" role="tablist" aria-label="Forge Master mode">
+        <button
+          role="tab"
+          aria-selected={mode === "size"}
+          className={`fm-mode ${mode === "size" ? "active" : ""}`}
+          onClick={() => setMode("size")}
+        >
+          Size tasks
+        </button>
+        <button
+          role="tab"
+          aria-selected={mode === "plan"}
+          className={`fm-mode ${mode === "plan" ? "active" : ""}`}
+          onClick={() => setMode("plan")}
+        >
+          Plan my day
+        </button>
+      </div>
+
+      {mode === "plan" ? (
+        <div className="fm-plan">
+          {!plan && !planLoading && (
+            <>
+              <p className="fm-desc">
+                Dump everything on your mind. The Forge Master sequences it into
+                an ordered plan — deepest work first, quick wins batched.
+              </p>
+              <label className="sr-only" htmlFor="fm-braindump">
+                Brain-dump of things to do
+              </label>
+              <textarea
+                id="fm-braindump"
+                className="fm-braindump"
+                rows={4}
+                placeholder={"study for calc 2 test\nemail advisor\nfix the login bug\nread a NYT article"}
+                value={brainDump}
+                onChange={(e) => setBrainDump(e.target.value)}
+              />
+              <button
+                className="btn-forge-master"
+                onClick={runPlan}
+                disabled={!brainDump.trim()}
+              >
+                Plan my forge
+              </button>
+              {planError && <p className="fm-plan-error">{planError}</p>}
+            </>
+          )}
+
+          {planLoading && (
+            <p className="fm-loading">
+              <span className="fm-spinner" aria-hidden="true" />
+              Sequencing the work…
+            </p>
+          )}
+
+          {plan && !planLoading && (
+            <div className="fm-body">
+              {plan.length > 0 ? (
+                <>
+                  <ol className="fm-plan-list">
+                    {plan.map((s) => {
+                      const r = rarityForDuration(s.minutes);
+                      return (
+                        <li className="fm-plan-step" key={s.order}>
+                          <span className="fm-plan-order">{s.order}</span>
+                          <span className="fm-plan-body">
+                            <span className="fm-plan-title">{s.title}</span>
+                            <em>
+                              {s.reason} · <span className={`rarity-${r}`}>{s.minutes}m</span>
+                            </em>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  {planTip && <p className="fm-pattern">{planTip}</p>}
+                  <button
+                    className="btn-forge-master"
+                    onClick={addPlanToQueue}
+                    disabled={planAdded}
+                  >
+                    {planAdded ? "Added to queue ✓" : "Add plan to queue"}
+                  </button>
+                </>
+              ) : (
+                <p className="fm-pattern">Nothing to plan — try adding a few lines.</p>
+              )}
+              <button
+                className="btn-ghost"
+                onClick={() => {
+                  setPlan(null);
+                  setPlanAdded(false);
+                }}
+              >
+                New plan
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {!insight && !loading && (
         <>
           <p className="fm-desc">
@@ -156,8 +307,8 @@ export function ForgeMaster({ tasks, activeTaskId, stats, onApplyEstimates }: Fo
             patterns, and hand you a retro.
           </p>
           <button className="btn-forge-master" onClick={analyze}>
-            {tasks.filter((t) => !t.estimatedMinutes && t.id !== activeTaskId).length > 0
-              ? `Size up ${tasks.filter((t) => !t.estimatedMinutes && t.id !== activeTaskId).length} unsized task${tasks.filter((t) => !t.estimatedMinutes && t.id !== activeTaskId).length === 1 ? "" : "s"}`
+            {unsizedCount > 0
+              ? `Size up ${unsizedCount} unsized task${unsizedCount === 1 ? "" : "s"}`
               : tasks.length > 0
                 ? "All tasks sized"
                 : "Show my forge report"}
@@ -218,6 +369,8 @@ export function ForgeMaster({ tasks, activeTaskId, stats, onApplyEstimates }: Fo
             Close
           </button>
         </div>
+      )}
+        </>
       )}
     </section>
   );
